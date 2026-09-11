@@ -113,3 +113,45 @@ def test_create_async_job(monkeypatch):
         "job_id": "test-job-123",
         "status": "queued",
     }
+
+
+def test_get_job_status_queued(monkeypatch):
+    monkeypatch.setattr(
+        "speech.api.main.get_transcription_result",
+        lambda job_id: None,
+    )
+
+    response = client.get("/api/v1/jobs/test-job-123")
+
+    assert response.status_code == 200
+
+    assert response.json() == {
+        "job_id": "test-job-123",
+        "status": "queued",
+        "result": None,
+    }
+
+
+def test_get_job_status_completed(monkeypatch):
+    result = {
+        "text": "Hello from Whisper.",
+        "language": "en",
+        "language_probability": 1.0,
+        "duration": 2.0,
+        "segments": [],
+    }
+
+    monkeypatch.setattr(
+        "speech.api.main.get_transcription_result",
+        lambda job_id: result,
+    )
+
+    response = client.get("/api/v1/jobs/test-job-123")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["job_id"] == "test-job-123"
+    assert data["status"] == "completed"
+    assert data["result"]["text"] == "Hello from Whisper."

@@ -6,7 +6,11 @@ from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 
-from speech.api.schemas import JobResponse, TranscriptionResponse
+from speech.api.schemas import (
+    JobResponse,
+    JobStatusResponse,
+    TranscriptionResponse,
+)
 from speech.core.config import get_settings
 from speech.core.logging import configure_logging
 from speech.services.audio_validation import (
@@ -14,6 +18,7 @@ from speech.services.audio_validation import (
     validate_audio_file,
 )
 from speech.services.jobs import create_transcription_job
+from speech.services.storage import get_transcription_result
 from speech.services.transcription import transcribe_audio
 
 configure_logging()
@@ -234,6 +239,26 @@ def create_job(
 
         if temp_path and temp_path.exists():
             temp_path.unlink()
+
+
+@app.get(
+    "/api/v1/jobs/{job_id}",
+    response_model=JobStatusResponse,
+)
+def get_job_status(job_id: str) -> JobStatusResponse:
+    result = get_transcription_result(job_id)
+
+    if result is None:
+        return JobStatusResponse(
+            job_id=job_id,
+            status="queued",
+        )
+
+    return JobStatusResponse(
+        job_id=job_id,
+        status="completed",
+        result=result,
+    )
 
 
 logger = logging.getLogger(__name__)
