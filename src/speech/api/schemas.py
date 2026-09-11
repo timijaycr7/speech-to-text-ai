@@ -13,3 +13,8 @@ class TranscriptionResponse(BaseModel):
     language_probability: float
     duration: float
     segments: list[Segment]
+
+
+class JobResponse(BaseModel):
+    job_id: str
+    status: str

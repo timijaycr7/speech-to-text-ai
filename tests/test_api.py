@@ -74,3 +74,42 @@ def test_create_transcription(monkeypatch):
     assert data["language"] == "en"
     assert data["duration"] == 4.5
     assert len(data["segments"]) == 1
+
+
+def test_create_async_job(monkeypatch):
+    monkeypatch.setattr(
+        "speech.api.main.validate_audio_file",
+        lambda audio_path: None,
+    )
+
+    def fake_create_transcription_job(
+        audio_path,
+        original_filename,
+    ):
+        return {
+            "job_id": "test-job-123",
+            "status": "queued",
+        }
+
+    monkeypatch.setattr(
+        "speech.api.main.create_transcription_job",
+        fake_create_transcription_job,
+    )
+
+    response = client.post(
+        "/api/v1/jobs",
+        files={
+            "file": (
+                "sample.m4a",
+                b"fake audio content",
+                "audio/mp4",
+            )
+        },
+    )
+
+    assert response.status_code == 202
+
+    assert response.json() == {
+        "job_id": "test-job-123",
+        "status": "queued",
+    }

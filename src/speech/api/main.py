@@ -6,13 +6,14 @@ from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 
-from speech.api.schemas import TranscriptionResponse
+from speech.api.schemas import JobResponse, TranscriptionResponse
 from speech.core.config import get_settings
 from speech.core.logging import configure_logging
 from speech.services.audio_validation import (
     InvalidAudioError,
     validate_audio_file,
 )
+from speech.services.jobs import create_transcription_job
 from speech.services.transcription import transcribe_audio
 
 configure_logging()
@@ -155,6 +156,77 @@ def create_transcription(
         raise HTTPException(
             status_code=500,
             detail="Transcription failed.",
+        ) from exc
+
+    finally:
+        file.file.close()
+
+        if temp_path and temp_path.exists():
+            temp_path.unlink()
+
+
+@app.post(
+    "/api/v1/jobs",
+    response_model=JobResponse,
+    status_code=202,
+)
+def create_job(
+    file: Annotated[UploadFile, File(...)],
+) -> JobResponse:
+    """Accept audio and queue it for asynchronous transcription."""
+
+    if not file.filename:
+        raise HTTPException(
+            status_code=400,
+            detail="Audio file must have a filename.",
+        )
+
+    suffix = Path(file.filename).suffix.lower()
+
+    if suffix not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported audio format: {suffix}",
+        )
+
+    temp_path: Path | None = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=suffix,
+        ) as temp_file:
+            save_upload_with_limit(
+                file,
+                temp_file,
+            )
+
+            temp_path = Path(temp_file.name)
+
+        validate_audio_file(temp_path)
+
+        result = create_transcription_job(
+            audio_path=temp_path,
+            original_filename=file.filename,
+        )
+
+        return JobResponse.model_validate(result)
+
+    except HTTPException:
+        raise
+
+    except InvalidAudioError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        logger.exception("Failed to create transcription job.")
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to create transcription job.",
         ) from exc
 
     finally:

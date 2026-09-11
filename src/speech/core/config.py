@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     beam_size: int = 5
     log_level: str = "INFO"
     max_upload_size_mb: int = 25
+    aws_region: str = "eu-west-1"
+    s3_bucket: str | None = None
+    sqs_queue_url: str | None = None
 
 
 @lru_cache
